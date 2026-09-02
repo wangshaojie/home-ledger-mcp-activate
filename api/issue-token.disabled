@@ -1,0 +1,10 @@
+// 这个文件放在 api/ 顶层是为了防止 Vercel 接管整个 /api/* 路由
+// 它现在被改成了 .disabled 后缀,Vercel 不会编译它
+//
+// 之前 Vercel 在 Next.js 项目里发现 api/ 顶层有 .ts 文件,
+// 就会接管所有 /api/* 路由(原生 serverless 模式),让 Next.js pages/api/* 失效
+// 现在 api/ 顶层没有任何 .ts/.js 文件,Vercel 正常走 Next.js pages/api
+//
+// 实际 API:
+//   - /api/send-otp  -> pages/api/send-otp.ts
+//   - /api/exchange  -> pages/api/exchange.ts
