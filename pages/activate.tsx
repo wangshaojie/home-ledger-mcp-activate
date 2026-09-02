@@ -4,11 +4,8 @@
 // 3) 输入设备名 → 点授权
 // 4) 拿 mcp_token → 复制 → 跑 home-ledger-mcp login
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
 type Step = 'email' | 'otp' | 'device' | 'token' | 'error';
 
@@ -90,13 +87,25 @@ export default function ActivatePage() {
   const [error, setError] = useState('');
   const [issued, setIssued] = useState<IssuedToken | null>(null);
   const [copied, setCopied] = useState(false);
-  const [supabase] = useState<SupabaseClient>(() =>
-    createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    }),
-  );
+  // 客户端水合后才创建 Supabase client,避免 SSG 阶段因 env 缺失抛错
+  const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
+  const [configError, setConfigError] = useState(false);
 
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  useEffect(() => {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !key) {
+      setConfigError(true);
+      return;
+    }
+    setSupabase(
+      createClient(url, key, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      }),
+    );
+  }, []);
+
+  if (configError) {
     return (
       <div style={styles.page}>
         <div style={styles.card}>
@@ -106,6 +115,16 @@ export default function ActivatePage() {
             <code> NEXT_PUBLIC_SUPABASE_URL </code>和
             <code> NEXT_PUBLIC_SUPABASE_ANON_KEY</code>。
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!supabase) {
+    return (
+      <div style={styles.page}>
+        <div style={styles.card}>
+          <p style={{ color: '#999', textAlign: 'center' }}>加载中...</p>
         </div>
       </div>
     );
@@ -121,6 +140,7 @@ export default function ActivatePage() {
 
   async function handleSendOtp(e: React.FormEvent) {
     e.preventDefault();
+    if (!supabase) return;
     setError('');
     setLoading(true);
     try {
@@ -136,6 +156,7 @@ export default function ActivatePage() {
 
   async function handleVerifyOtp(e: React.FormEvent) {
     e.preventDefault();
+    if (!supabase) return;
     setError('');
     setLoading(true);
     try {
@@ -155,6 +176,7 @@ export default function ActivatePage() {
 
   async function handleIssueToken(e: React.FormEvent) {
     e.preventDefault();
+    if (!supabase) return;
     setError('');
     setLoading(true);
     try {
@@ -170,9 +192,20 @@ export default function ActivatePage() {
         }),
       });
 
-      const json = await resp.json();
+      // 调试:看真实响应
+      const contentType = resp.headers.get('content-type') ?? '';
+      const raw = await resp.text();
+      console.log('[issue-token] status:', resp.status, 'content-type:', contentType, 'body:', raw.slice(0, 500));
+
+      if (!contentType.includes('application/json')) {
+        throw new Error(
+          `后端返非 JSON (HTTP ${resp.status}, ${contentType})。请看 Vercel Runtime Logs。响应前 200 字: ${raw.slice(0, 200)}`,
+        );
+      }
+
+      const json = JSON.parse(raw);
       if (!resp.ok) {
-        throw new Error(json.message ?? json.error ?? '授权失败');
+        throw new Error(json.message ?? json.error ?? `HTTP ${resp.status}`);
       }
       setIssued(json as IssuedToken);
       setStep('token');
