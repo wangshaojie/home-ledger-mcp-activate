@@ -1,15 +1,12 @@
-// ⚠️ DEPRECATED: 实际 API 在 pages/api/issue-token.ts
-// 这个文件留着是因为 git 历史里有它,删了 git push 会很乱。
-// Vercel build 时 Next.js 不会编译 api/ 顶层(它属于 Vercel 原生 serverless),
-// 但 Next.js 还是会做 type-check 检查 —— 所以这里必须用 Next.js 类型而不是 @vercel/node。
-//
-// 不要往这个文件加任何代码。所有 API 逻辑在 pages/api/issue-token.ts。
+// ⚠️ DEPRECATED 占位 - 实际 API 都在 pages/api/ 下
+// Vercel 在 Next.js 项目里会编译 api/ 顶层的 .ts/.js 文件(当成原生 serverless function)
+// 所以这里必须用 CommonJS 语法,而不能用 ESM `export default`
+// 真正的 issue-token 逻辑在 pages/api/issue-token.ts(也已废弃,新版用 pages/api/send-otp + pages/api/exchange)
+// 此文件永不被调用,只是为了避免 Vercel 构建时尝试加载 ESM 模块失败
 
-import type { NextApiRequest, NextApiResponse } from 'next';
-
-export default function deprecated_stub(_req: NextApiRequest, res: NextApiResponse) {
-  res.status(404).json({
-    error: 'deprecated',
-    message: '此路径已弃用,请使用 /api/issue-token (由 pages/api 处理)',
+module.exports = function deprecated_stub(_req, res) {
+  res.status(410).json({
+    error: 'gone',
+    message: '此端点已废弃,请使用 /api/send-otp + /api/exchange',
   });
-}
+};
