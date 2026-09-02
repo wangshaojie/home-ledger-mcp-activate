@@ -199,6 +199,59 @@ export default function ActivatePage() {
     }
   }
 
+  // 不同 AI agent 客户端的 mcp.json 配置
+  const mcpUrl = typeof window !== 'undefined' ? `${window.location.origin}/api/mcp` : 'https://mcp.240730.xyz/api/mcp';
+  const mcpConfigCursor = `{
+  "mcpServers": {
+    "home-ledger": {
+      "url": "${mcpUrl}",
+      "headers": {
+        "Authorization": "Bearer ${issued?.mcp_token ?? '<粘贴你的 mcp_token>'}"
+      }
+    }
+  }
+}`;
+  const mcpConfigClaude = `{
+  "mcpServers": {
+    "home-ledger": {
+      "type": "http",
+      "url": "${mcpUrl}",
+      "headers": {
+        "Authorization": "Bearer ${issued?.mcp_token ?? '<粘贴你的 mcp_token>'}"
+      }
+    }
+  }
+}`;
+  const mcpConfigGeneric = `{
+  "mcpServers": {
+    "home-ledger": {
+      "url": "${mcpUrl}",
+      "transport": "http",
+      "headers": {
+        "Authorization": "Bearer ${issued?.mcp_token ?? '<粘贴你的 mcp_token>'}"
+      }
+    }
+  }
+}`;
+
+  const [clientTab, setClientTab] = useState<'cursor' | 'claude' | 'generic'>('cursor');
+  const [copiedConfig, setCopiedConfig] = useState(false);
+  const clientConfigs: Record<typeof clientTab, { name: string; config: string; doc: string }> = {
+    cursor: { name: 'Cursor', config: mcpConfigCursor, doc: '粘贴到 ~/.cursor/mcp.json 后重启 Cursor' },
+    claude: { name: 'Claude Desktop', config: mcpConfigClaude, doc: '粘贴到 ~/Library/Application Support/Claude/claude_desktop_config.json(Windows: %APPDATA%\\Claude\\)后重启' },
+    generic: { name: '其他 (Mavis / WorkBuddy / Codex 等)', config: mcpConfigGeneric, doc: '不同客户端配置位置不同,参考各客户端文档' },
+  };
+  async function copyConfig() {
+    if (!issued) return;
+    try {
+      await navigator.clipboard.writeText(clientConfigs[clientTab].config);
+      setCopiedConfig(true);
+      setTimeout(() => setCopiedConfig(false), 2000);
+    } catch {
+      setError('复制失败,请手动选择复制');
+    }
+  }
+
   return (
     <div style={styles.page}>
       <div style={styles.card}>
@@ -315,37 +368,80 @@ export default function ActivatePage() {
         {step === 'token' && issued && (
           <div>
             <p style={{ fontSize: '14px', color: '#2e7d32', fontWeight: 600 }}>
-              ✅ 授权成功!复制下面的 token:
+              ✅ 授权成功!零安装接入 AI agent
             </p>
-            <div style={styles.tokenBox}>{issued.mcp_token}</div>
-            <button
-              type="button"
-              onClick={copyToken}
-              style={{ ...styles.btn, ...(copied ? { background: '#2e7d32' } : {}) }}
-            >
-              {copied ? '✅ 已复制' : '复制到剪贴板'}
-            </button>
 
-            <p style={{ marginTop: '24px', fontSize: '13px', color: '#666' }}>
-              <b>下一步:</b>回到终端,跑:
+            <p style={{ fontSize: '13px', color: '#666', marginTop: '12px' }}>
+              选你的 AI agent,复制下面的配置粘贴进去:
             </p>
+
+            {/* Client tabs */}
+            <div style={{ display: 'flex', gap: '4px', marginTop: '12px', marginBottom: '8px' }}>
+              {(Object.keys(clientConfigs) as Array<keyof typeof clientConfigs>).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setClientTab(k)}
+                  style={{
+                    flex: 1,
+                    padding: '8px 4px',
+                    fontSize: '12px',
+                    background: clientTab === k ? '#667eea' : '#f0f0f0',
+                    color: clientTab === k ? '#fff' : '#666',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontWeight: clientTab === k ? 600 : 400,
+                  }}
+                >
+                  {clientConfigs[k].name}
+                </button>
+              ))}
+            </div>
+
             <pre
               style={{
                 background: '#1e1e1e',
                 color: '#d4d4d4',
                 padding: '12px',
                 borderRadius: '6px',
-                fontSize: '13px',
+                fontSize: '12px',
                 overflow: 'auto',
+                margin: 0,
+                whiteSpace: 'pre-wrap' as const,
+                wordBreak: 'break-all' as const,
               }}
             >
-{`# 粘贴复制的 token 到登录流程
-home-ledger-mcp login
-# 设备名: ${deviceName}
-# access_token: (粘贴)`}
+{clientConfigs[clientTab].config}
             </pre>
 
-            <p style={{ marginTop: '12px', fontSize: '12px', color: '#999' }}>
+            <button
+              type="button"
+              onClick={copyConfig}
+              style={{ ...styles.btn, marginTop: '8px', ...(copiedConfig ? { background: '#2e7d32' } : {}) }}
+            >
+              {copiedConfig ? '✅ 已复制' : '复制配置'}
+            </button>
+
+            <p style={{ marginTop: '8px', fontSize: '11px', color: '#999' }}>
+              {clientConfigs[clientTab].doc}
+            </p>
+
+            <details style={{ marginTop: '20px' }}>
+              <summary style={{ cursor: 'pointer', fontSize: '13px', color: '#666' }}>
+                🔧 高级:手动复制 token
+              </summary>
+              <div style={styles.tokenBox}>{issued.mcp_token}</div>
+              <button
+                type="button"
+                onClick={copyToken}
+                style={{ ...styles.btn, ...(copied ? { background: '#2e7d32' } : {}) }}
+              >
+                {copied ? '✅ 已复制' : '复制 token'}
+              </button>
+            </details>
+
+            <p style={{ marginTop: '20px', fontSize: '11px', color: '#999' }}>
               token 过期: {new Date(issued.expires_at).toLocaleString('zh-CN')}
               <br />
               设备 ID: <code>{issued.device_id}</code>
