@@ -427,6 +427,38 @@ export default function ActivatePage() {
               {clientConfigs[clientTab].doc}
             </p>
 
+            {/* 使用前检查清单 */}
+            <div
+              style={{
+                marginTop: '20px',
+                background: '#f0f4ff',
+                border: '1px solid #cfe0ff',
+                borderRadius: '8px',
+                padding: '12px 14px',
+              }}
+            >
+              <p style={{ margin: '0 0 8px', fontSize: '13px', fontWeight: 600, color: '#1a1a1a' }}>
+                📋 使用前检查清单
+              </p>
+              <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '12px', color: '#444', lineHeight: '2' }}>
+                <li>
+                  配置要贴到 <b>{clientConfigs[clientTab].name}</b> 的配置文件,已有内容请<b>合并</b>,别整文件覆盖
+                </li>
+                <li>
+                  贴完<b>完全退出并重启</b>客户端(含托盘图标),配置才会加载
+                </li>
+                <li>
+                  重启后在客户端 MCP 面板确认 <code>home-ledger</code> 显示为绿色「已连接」
+                </li>
+                <li>
+                  提示 401 / token 验证失败:token 已过期(30 天)或被吊销 → 回本页重新授权
+                </li>
+                <li>
+                  token 只在授权时显示一次,泄露可到主应用「设备管理」吊销此设备
+                </li>
+              </ul>
+            </div>
+
             <details style={{ marginTop: '20px' }}>
               <summary style={{ cursor: 'pointer', fontSize: '13px', color: '#666' }}>
                 🔧 高级:手动复制 token
