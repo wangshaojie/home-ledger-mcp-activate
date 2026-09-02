@@ -1,11 +1,11 @@
 // 激活页 - 3 步流程(走 Resend,绕开 Supabase 4 封/小时限制)
-// 1) 输邮箱 → 点发送 → Resend 发 6 位 OTP
-// 2) 输 OTP + 设备名 → 点授权
-// 3) 拿 mcp_token → 复制
+// 1) 输邮箱 → 发送激活邮件
+// 2) 输 6 位 OTP → 验证
+// 3) 输设备名 → 拿 mcp_token
 
 import { useState } from 'react';
 
-type Step = 'email' | 'otp' | 'token' | 'error';
+type Step = 'email' | 'otp' | 'device' | 'token' | 'error';
 
 interface IssuedToken {
   mcp_token: string;
@@ -61,6 +61,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '8px 12px',
     background: '#ffebee',
     borderRadius: '4px',
+    wordBreak: 'break-word' as const,
   },
   tokenBox: {
     background: '#f5f5f5',
@@ -74,6 +75,14 @@ const styles: Record<string, React.CSSProperties> = {
   },
   step: { fontSize: '12px', color: '#999', marginBottom: '16px' },
   link: { color: '#667eea', textDecoration: 'none', fontSize: '13px' },
+  ok: {
+    color: '#2e7d32',
+    fontSize: '13px',
+    marginTop: '8px',
+    padding: '8px 12px',
+    background: '#e8f5e9',
+    borderRadius: '4px',
+  },
 };
 
 export default function ActivatePage() {
@@ -81,15 +90,18 @@ export default function ActivatePage() {
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
   const [deviceName, setDeviceName] = useState('');
+  const [userId, setUserId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [issued, setIssued] = useState<IssuedToken | null>(null);
   const [copied, setCopied] = useState(false);
 
   const stepLabel: Record<Step, string> = {
     email: '第 1 步 / 共 3 步 · 邮箱',
-    otp: '第 2 步 / 共 3 步 · 验证码 + 设备名',
-    token: '第 3 步 / 共 3 步 · 复制 token',
+    otp: '第 2 步 / 共 3 步 · 验证码',
+    device: '第 3 步 / 共 3 步 · 设备名',
+    token: '完成',
     error: '出错',
   };
 
@@ -104,11 +116,12 @@ export default function ActivatePage() {
         body: JSON.stringify({ email }),
       });
       const raw = await resp.text();
-      let json: { error?: string; message?: string } = {};
+      let json: { ok?: boolean; error?: string; message?: string } = {};
       try { json = JSON.parse(raw); } catch {}
       if (!resp.ok) {
         throw new Error(json.message ?? json.error ?? `HTTP ${resp.status}`);
       }
+      setInfo('邮件已发送,请查收');
       setStep('otp');
     } catch (e) {
       setError((e as Error).message);
@@ -117,26 +130,53 @@ export default function ActivatePage() {
     }
   }
 
-  async function handleExchange(e: React.FormEvent) {
+  async function handleVerifyOtp(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      const resp = await fetch('/api/exchange', {
+      const resp = await fetch('/api/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code: otp }),
+      });
+      const raw = await resp.text();
+      let json: { user_id?: string; email?: string; error?: string; message?: string; raw?: string } = {};
+      try { json = JSON.parse(raw); } catch {}
+      if (!resp.ok) {
+        const detail = json.raw ? ` [${json.raw}]` : '';
+        throw new Error(`${json.message ?? json.error ?? `HTTP ${resp.status}`}${detail}`);
+      }
+      setUserId(json.user_id ?? '');
+      setInfo('✓ 验证码正确');
+      setStep('device');
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleCreateDevice(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const resp = await fetch('/api/create-device', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          user_id: userId,
           email,
           code: otp,
           device_name: deviceName,
         }),
       });
       const raw = await resp.text();
-      let json: IssuedToken & { error?: string; message?: string } = {} as never;
+      let json: IssuedToken & { error?: string; message?: string; raw?: string } = {} as never;
       try { json = JSON.parse(raw); } catch {}
       if (!resp.ok) {
-        const raw2 = (json as { raw?: string }).raw;
-        const detail = raw2 ? ` [${raw2}]` : '';
+        const detail = json.raw ? ` [${json.raw}]` : '';
         throw new Error(`${json.message ?? json.error ?? `HTTP ${resp.status}`}${detail}`);
       }
       setIssued(json as IssuedToken);
@@ -167,6 +207,7 @@ export default function ActivatePage() {
         <div style={styles.step}>{stepLabel[step]}</div>
 
         {error && <div style={styles.error}>❌ {error}</div>}
+        {info && !error && <div style={styles.ok}>{info}</div>}
 
         {step === 'email' && (
           <form onSubmit={handleSendOtp}>
@@ -193,7 +234,7 @@ export default function ActivatePage() {
         )}
 
         {step === 'otp' && (
-          <form onSubmit={handleExchange}>
+          <form onSubmit={handleVerifyOtp}>
             <p style={{ fontSize: '13px', color: '#666' }}>
               验证码已发送到 <b>{email}</b>
             </p>
@@ -209,21 +250,12 @@ export default function ActivatePage() {
               required
               autoFocus
             />
-            <input
-              style={styles.input}
-              type="text"
-              maxLength={100}
-              placeholder='设备名(例:"我的 Mavis"、"Cursor 笔记本")'
-              value={deviceName}
-              onChange={(e) => setDeviceName(e.target.value)}
-              required
-            />
             <button
               type="submit"
               style={{ ...styles.btn, ...(loading ? styles.btnDisabled : {}) }}
-              disabled={loading || otp.length !== 6 || !deviceName.trim()}
+              disabled={loading || otp.length !== 6}
             >
-              {loading ? '授权中...' : '授权并生成 token'}
+              {loading ? '验证中...' : '验证'}
             </button>
             <p style={{ marginTop: '12px', fontSize: '13px' }}>
               <a
@@ -233,9 +265,48 @@ export default function ActivatePage() {
                   e.preventDefault();
                   setStep('email');
                   setOtp('');
+                  setInfo('');
+                  setError('');
                 }}
               >
                 ← 换邮箱
+              </a>
+            </p>
+          </form>
+        )}
+
+        {step === 'device' && (
+          <form onSubmit={handleCreateDevice}>
+            <p style={{ fontSize: '13px', color: '#2e7d32' }}>✓ 验证码通过</p>
+            <input
+              style={styles.input}
+              type="text"
+              maxLength={100}
+              placeholder='设备名(例:"我的 Mavis"、"Cursor 笔记本")'
+              value={deviceName}
+              onChange={(e) => setDeviceName(e.target.value)}
+              required
+              autoFocus
+            />
+            <button
+              type="submit"
+              style={{ ...styles.btn, ...(loading ? styles.btnDisabled : {}) }}
+              disabled={loading || !deviceName.trim()}
+            >
+              {loading ? '授权中...' : '授权并生成 token'}
+            </button>
+            <p style={{ marginTop: '12px', fontSize: '13px' }}>
+              <a
+                style={styles.link}
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setStep('otp');
+                  setDeviceName('');
+                  setError('');
+                }}
+              >
+                ← 改验证码
               </a>
             </p>
           </form>
