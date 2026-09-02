@@ -4,7 +4,7 @@
 // 真正的 issue-token 逻辑在 pages/api/issue-token.ts(也已废弃,新版用 pages/api/send-otp + pages/api/exchange)
 // 此文件永不被调用,只是为了避免 Vercel 构建时尝试加载 ESM 模块失败
 
-module.exports = function deprecated_stub(_req, res) {
+module.exports = function deprecated_stub(_req: any, res: any) {
   res.status(410).json({
     error: 'gone',
     message: '此端点已废弃,请使用 /api/send-otp + /api/exchange',
