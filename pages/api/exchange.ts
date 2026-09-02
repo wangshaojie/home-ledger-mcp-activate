@@ -56,12 +56,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (error) {
     const msg = error.message;
-    let userMsg = '授权失败,请重试';
+    console.error('[exchange] Supabase RPC 错误:', msg);
+    // 暴露真错,方便调试(不直接拼接到 userMsg 是因为可能含 SQL 细节)
+    // 优先匹配 RPC raise 的具体消息
+    let userMsg = `授权失败: ${msg}`;
     if (msg.includes('邮箱未注册')) userMsg = '该邮箱未注册';
-    if (msg.includes('验证码错误') || msg.includes('已过期')) userMsg = msg;
+    if (msg.includes('验证码错误') || msg.includes('已过期')) userMsg = '验证码错误或已过期(检查是否输错,或重新申请)';
     if (msg.includes('5 台')) userMsg = '设备数已达上限(5 台),请先在桌面端吊销旧设备';
     if (msg.includes('设备名')) userMsg = '设备名不合法(1-100 字符)';
-    return res.status(400).json({ error: 'exchange_failed', message: userMsg });
+    if (msg.includes('请求过于频繁')) userMsg = '请求过于频繁,请稍后再试';
+    return res.status(400).json({ error: 'exchange_failed', message: userMsg, raw: msg });
   }
 
   if (!data || data.length === 0) {

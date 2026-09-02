@@ -135,7 +135,9 @@ export default function ActivatePage() {
       let json: IssuedToken & { error?: string; message?: string } = {} as never;
       try { json = JSON.parse(raw); } catch {}
       if (!resp.ok) {
-        throw new Error(json.message ?? json.error ?? `HTTP ${resp.status}`);
+        const raw2 = (json as { raw?: string }).raw;
+        const detail = raw2 ? ` [${raw2}]` : '';
+        throw new Error(`${json.message ?? json.error ?? `HTTP ${resp.status}`}${detail}`);
       }
       setIssued(json as IssuedToken);
       setStep('token');
